@@ -6272,7 +6272,7 @@ spec:
         - --enable-leader-election
         - --logtostderr
         - --v=4
-        image: gcr.io/cluster-api-provider-vsphere/release/manager:v1.3.0
+        image: registry.tkg.vmware.run/cluster-api/cluster-api-vsphere-controller:${CAPV_CONTROLLER_IMAGE_TAG}
         imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
@@ -6297,6 +6297,13 @@ spec:
         - mountPath: /etc/capv
           name: manager-bootstrap-credentials
           readOnly: true
+        env:
+        - name: HTTP_PROXY
+          value: ${TKG_HTTP_PROXY}
+        - name: HTTPS_PROXY
+          value: ${TKG_HTTPS_PROXY}
+        - name: NO_PROXY
+          value: ${TKG_NO_PROXY}
       terminationGracePeriodSeconds: 10
       tolerations:
       - effect: NoSchedule
