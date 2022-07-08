@@ -6,6 +6,7 @@ package tkgs
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
