@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -24,12 +25,13 @@ type E2ENodePoolSpecInput struct {
 
 func E2ENodePoolSpec(context context.Context, inputGetter func() E2ENodePoolSpecInput) {
 	var (
-		err          error
-		input        E2ENodePoolSpecInput
-		tkgCtlClient tkgctl.TKGClient
-		logsDir      string
-		clusterName  string
-		namespace    string
+		err           error
+		input         E2ENodePoolSpecInput
+		tkgCtlClient  tkgctl.TKGClient
+		logsDir       string
+		clusterName   string
+		namespace     string
+		expectedNodes int
 	)
 
 	BeforeEach(func() { //nolint:dupl
@@ -93,9 +95,15 @@ func E2ENodePoolSpec(context context.Context, inputGetter func() E2ENodePoolSpec
 		})
 		Expect(err).To(BeNil())
 
+		if strings.Contains(input.Plan, "prod") {
+			expectedNodes = 4
+		} else {
+			expectedNodes = 2
+		}
+
 		By(fmt.Sprintf("Waiting for workload cluster %q nodes to be up and running", clusterName))
 		contextName := clusterName + "-admin@" + clusterName
-		framework.WaitForNodes(framework.NewClusterProxy(clusterName, "", contextName), 2)
+		framework.WaitForNodes(framework.NewClusterProxy(clusterName, "", contextName), expectedNodes)
 
 		if input.NodePool.Replicas == nil {
 			input.NodePool.Replicas = func(i int32) *int32 { return &i }(1)
@@ -108,11 +116,10 @@ func E2ENodePoolSpec(context context.Context, inputGetter func() E2ENodePoolSpec
 		})
 		Expect(err).To(BeNil())
 
-		desiredNodes := 2
 		if input.NodePool.Replicas != nil {
-			desiredNodes += int(*input.NodePool.Replicas)
+			expectedNodes += int(*input.NodePool.Replicas)
 		}
-		framework.WaitForNodes(framework.NewClusterProxy(clusterName, "", contextName), desiredNodes)
+		framework.WaitForNodes(framework.NewClusterProxy(clusterName, "", contextName), expectedNodes)
 
 		By(fmt.Sprintf("Updating node pool %q on cluster %q", input.NodePool.Name, clusterName))
 
@@ -124,8 +131,8 @@ func E2ENodePoolSpec(context context.Context, inputGetter func() E2ENodePoolSpec
 			NodePool:    input.NodePool,
 		})
 		Expect(err).To(BeNil())
-		desiredNodes += 1
-		framework.WaitForNodes(framework.NewClusterProxy(clusterName, "", contextName), desiredNodes)
+		expectedNodes += 1
+		framework.WaitForNodes(framework.NewClusterProxy(clusterName, "", contextName), expectedNodes)
 
 		By(fmt.Sprintf("Deleting node pool %q on cluster %q", input.NodePool.Name, clusterName))
 		err = tkgCtlClient2.DeleteMachineDeployment(client.DeleteMachineDeploymentOptions{
