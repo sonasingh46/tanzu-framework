@@ -6,11 +6,9 @@ package tkgs
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -18,45 +16,16 @@ import (
 
 	"github.com/vmware-tanzu/tanzu-framework/pkg/v1/tkg/constants"
 	"github.com/vmware-tanzu/tanzu-framework/pkg/v1/tkg/test/framework"
-	"github.com/vmware-tanzu/tanzu-framework/pkg/v1/tkg/test/framework/exec"
 	"github.com/vmware-tanzu/tanzu-framework/pkg/v1/tkg/tkgctl"
 )
-
 const TKC_KIND = "kind: TanzuKubernetesCluster"
 
 var _ = Describe("TKGS - Create workload cluster use cases", func() {
-	var (
-		logsDir              string
-		clusterConfigFile    string
-		err                  error
-		deleteClusterOptions tkgctl.DeleteClustersOptions
-		clusterOptions       tkgctl.CreateClusterOptions
-		tkgctlOptions        tkgctl.Options
-		tkgctlClient         tkgctl.TKGClient
-	)
-	BeforeEach(func() {
-		logsDir = filepath.Join(artifactsFolder, "logs")
-		tkgctlOptions = tkgctl.Options{
-			ConfigDir:    e2eConfig.TkgConfigDir,
-			KubeConfig:   e2eConfig.TKGSKubeconfigPath,
-			KubeContext:  e2eConfig.TKGSKubeconfigContext,
-			SettingsFile: TKGS_SETTINGS_FILE,
-			LogOptions: tkgctl.LoggingOptions{
-				File:      filepath.Join(logsDir, "tkgs-create-wc.log"),
-				Verbosity: e2eConfig.TkgCliLogLevel,
-			},
-		}
-		clusterOptions = tkgctl.CreateClusterOptions{
-			ClusterConfigFile: clusterConfigFile,
-			Edition:           "tkg",
-			SkipPrompt:        true,
-		}
-	})
 	Context("input file is legacy config file - TKC cluster", func() {
 		BeforeEach(func() {
 			Expect(e2eConfig.TkrVersion).ToNot(BeEmpty(), fmt.Sprintf("the kubernetes_version should not be empty to create legacy TKGS cluster"))
 			clusterOptions.TkrVersion = e2eConfig.TkrVersion
-		})
+		}) 
 		Context("cluster Plan is dev", func() {
 			BeforeEach(func() {
 				e2eConfig.WorkloadClusterOptions.ClusterPlan = "dev"
@@ -65,7 +34,7 @@ var _ = Describe("TKGS - Create workload cluster use cases", func() {
 				clusterOptions.ClusterConfigFile = createClusterConfigFile(e2eConfig)
 			})
 			AfterEach(func() {
-				defer os.Remove(clusterConfigFile)
+				defer os.Remove(clusterOptions.ClusterConfigFile)
 			})
 			When("cluster class cli feature flag (features.global.package-based-lcm-beta) is set to true", func() {
 				BeforeEach(func() {
@@ -162,7 +131,7 @@ var _ = Describe("TKGS - Create workload cluster use cases", func() {
 				clusterOptions.ClusterConfigFile = createClusterConfigFile(e2eConfig)
 			})
 			AfterEach(func() {
-				defer os.Remove(clusterConfigFile)
+				defer os.Remove(clusterOptions.ClusterConfigFile)
 			})
 			When("cluster class cli feature flag (features.global.package-based-lcm-beta) is set to true", func() {
 				BeforeEach(func() {
@@ -193,7 +162,7 @@ var _ = Describe("TKGS - Create workload cluster use cases", func() {
 					err = tkgctlClient.CreateCluster(clusterOptions)
 					Expect(err).To(BeNil())
 
-					By(fmt.Sprintf("Deleting TKC workload cluster %v in namespace: %v", e2eConfig.WorkloadClusterOptions.ClusterName, e2eConfig.WorkloadClusterOptions.Namespace))
+					By(fmt.Sprintf("deleting TKC workload cluster %v in namespace: %v", e2eConfig.WorkloadClusterOptions.ClusterName, e2eConfig.WorkloadClusterOptions.Namespace))
 					err = tkgctlClient.DeleteCluster(deleteClusterOptions)
 					Expect(err).To(BeNil())
 				})
@@ -201,10 +170,15 @@ var _ = Describe("TKGS - Create workload cluster use cases", func() {
 		})
 	})
 	Context("input file is Cluster Class based", func() {
+		var(
+			clusterName string
+			namespace string
+		)
 		BeforeEach(func() {
-			cclusterFile, err := os.ReadFile(e2eConfig.WorkloadClusterOptions.ClusterClassFilePath)
-			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to read the input cluster class based config file from: %v", e2eConfig.WorkloadClusterOptions.ClusterClassFilePath))
-			Expect(cclusterFile).ToNot(BeEmpty(), fmt.Sprintf("the input cluster class based config file should not be empty, file path: %v", e2eConfig.WorkloadClusterOptions.ClusterClassFilePath))
+			clusterName, namespace = ValidateClusterClassConfigFile(e2eConfig.WorkloadClusterOptions.ClusterClassFilePath)
+			e2eConfig.WorkloadClusterOptions.Namespace = namespace
+			e2eConfig.WorkloadClusterOptions.ClusterName = clusterName
+			deleteClusterOptions = getDeleteClustersOptions(e2eConfig)
 			clusterOptions.ClusterConfigFile = e2eConfig.WorkloadClusterOptions.ClusterClassFilePath
 		})
 		When("cluster class cli feature flag (features.global.package-based-lcm-beta) is set to true", func() {
@@ -219,9 +193,10 @@ var _ = Describe("TKGS - Create workload cluster use cases", func() {
 				err = tkgctlClient.CreateCluster(clusterOptions)
 				Expect(err).To(BeNil())
 
-				By(fmt.Sprintf("deleting cluster class based workload cluster"))
-				_, ccObject, _ := tkgctl.CheckIfInputFileIsClusterClassBased(e2eConfig.WorkloadClusterOptions.ClusterClassFilePath)
-				err = exec.KubectlWithArgs(context.Background(), e2eConfig.TKGSKubeconfigPath, "--context", e2eConfig.TKGSKubeconfigContext, "delete", "cluster", ccObject.GetName(), "-n", ccObject.GetNamespace())
+				
+				By(fmt.Sprintf("deleting cluster class based workload cluster %v in namespace: %v", clusterName, namespace))
+				//err = exec.KubectlWithArgs(context.Background(), e2eConfig.TKGSKubeconfigPath, "--context", e2eConfig.TKGSKubeconfigContext, "delete", "cluster", ccObject.GetName(), "-n", ccObject.GetNamespace())
+				err = tkgctlClient.DeleteCluster(deleteClusterOptions)
 				Expect(err).To(BeNil())
 			})
 		})
