@@ -19,7 +19,7 @@ var _ = Describe("Functional tests for aws - Antrea", func() {
 				E2EConfig:       e2eConfig,
 				ArtifactsFolder: artifactsFolder,
 				Cni:             "antrea",
-				Plan:            "devcc",
+				Plan:            "prodcc",
 				Namespace:       "default",
 			},
 			NodePool: client.NodePool{
